@@ -97,7 +97,7 @@ function plot_sol(sol,t,u0;f=Figure(),idxs=nothing,leg=false,ylim=nothing)
 	if isnothing(ylim)
 		ylims!(ax,0,u0[1][2]+0.5)
 	elseif ylim=="auto"
-		ylims!(ax,0,2*maximum(plot_sol))
+		ylims!(ax,0,2*maximum(plot_sol)+0.5)
 	else
 		ylims!(ax,0,ylim)
 	end
@@ -170,7 +170,7 @@ function make_ensemble_plot(sol, ts,u0;idxs=nothing)
 end
 
 # ╔═╡ bfd7af99-f571-41bd-bf1b-077ecd33d35c
-function calculate_kld(sol, ts,u0; rt=0,idxs=nothing,bin_width=1)
+function calculate_kld(sol, ts, u0; rt=0,idxs=nothing,bin_width=1)
 	if isnothing(idxs)
 		idxs=1:size(u0,1)
 		i_out=idxs[end]
@@ -262,9 +262,10 @@ end
 
 # ╔═╡ 5b781245-497e-423e-b4a8-e02d3ea90c73
 erk = @reaction_network begin
+	@parameters t_on t_off U_on
     @discrete_events begin
-        ((t == 20)) => [U ~ 10.0]
-        ((t == 70)) => [U ~ 0.0]
+        ((t == t_on)) => [U ~ U_on]
+        ((t == t_off)) => [U ~ 0.0]
     end
     (U,hillar(E,0,1,K,2),M,hillar(E,0,1,K,2)), 0 --> (E,M,P,X)
     (γ+δ*P,γ,γ,γ), (E,M,P,X) --> 0
@@ -461,17 +462,26 @@ md"""
 # ╔═╡ 732a8e02-0c7b-4dc6-931a-5adb13b9e60e
 erk
 
+# ╔═╡ bf582d62-f70c-4fed-bfe8-89a7cf221e55
+begin
+	U_on = 10.0
+	stim_erk=[:t_on => t_on, :t_off => t_off, :U_on => U_on]
+end
+
 # ╔═╡ 7327fe06-23f2-4d02-a11a-dec1ba0fa429
 begin
 	ts_erk=(0.,1000.)
 	u0_erk = [:E => 0, :M => 0, :P=>0, :X=>0]
-	ps_erk = [:K => 0.05, :δ=>50, :γ=>1, :U=>0.0]
+	ps_erk = vcat([:K => 0.05, :δ=>50, :γ=>1, :U=>0.0],stim_erk)
 	erk_models=make_models(erk, u0_erk, ts_erk, ps_erk)
 end
 
 
 # ╔═╡ d0bd6975-d1b8-46d5-9546-7be381e3d2d1
+sol_erk=solve_all(erk_models;t_on=120,t_off=170);
 
+# ╔═╡ 1bdb5d04-c789-42a9-be1b-3559e64fcfbf
+make_single_plot(sol_erk,ts_erk,u0_erk;ylim="auto")
 
 # ╔═╡ ce22200e-bf35-4db9-8dc9-1148f6756ae3
 md"""
@@ -530,7 +540,7 @@ md"""
 # ╠═0af77422-a512-4e60-8620-eea173bdb08f
 # ╠═662fbc83-03d9-4c91-a359-1c6c36365988
 # ╠═060c4219-33c9-4fe9-ba65-e412668eb31d
-# ╟─5b781245-497e-423e-b4a8-e02d3ea90c73
+# ╠═5b781245-497e-423e-b4a8-e02d3ea90c73
 # ╟─69c0612e-30f4-445f-8c9f-8589d5313502
 # ╠═75527d17-bb0d-46dd-a462-6ab166b5bd82
 # ╠═cd1175f0-136b-46de-92d7-cfbd2ecc4987
@@ -577,8 +587,10 @@ md"""
 # ╠═14cb190a-3cb1-4ba4-b496-b8f86bf9fe0e
 # ╠═6af5ce8b-32f1-4e86-9ba7-ca0a4da7ade5
 # ╠═732a8e02-0c7b-4dc6-931a-5adb13b9e60e
+# ╠═bf582d62-f70c-4fed-bfe8-89a7cf221e55
 # ╠═7327fe06-23f2-4d02-a11a-dec1ba0fa429
 # ╠═d0bd6975-d1b8-46d5-9546-7be381e3d2d1
+# ╠═1bdb5d04-c789-42a9-be1b-3559e64fcfbf
 # ╠═ce22200e-bf35-4db9-8dc9-1148f6756ae3
 # ╠═78ed549a-7049-491b-811c-84af638dd993
 # ╠═9515ec4a-3117-4c01-a3b9-577674dbeca9
