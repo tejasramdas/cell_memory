@@ -16,11 +16,18 @@ begin
 	using Bonito
 	using InformationMeasures, StatsBase
 	using Revise
+	using Dates
 end
 
 # ╔═╡ 6518c587-8638-4909-a995-b331634c8079
 md"""
 # Cellular memory
+#### $(Dates.today())
+"""
+
+# ╔═╡ 524af17b-ef72-4a03-a471-585db57f3ec1
+md"""
+## Activate packages
 """
 
 # ╔═╡ 6232caf5-e871-4be4-adb2-076d1ff00ca7
@@ -33,7 +40,7 @@ md"""
 
 # ╔═╡ 9cbb14a7-884b-4783-8fb4-650260d940d4
 html"""
-<style>main {max-width: 1000px;}</style>
+<style>main {max-width: 65%; overflow:scroll;}</style>
 <style>pluto-output.scroll_y {max-height: 2000px;}</style>
 """
 
@@ -150,7 +157,11 @@ end
 # ╔═╡ f0393588-23a8-4215-ab11-180cabae66ad
 function plot_kld(kld,ts;f=Figure(),step=0.1)
 	ax=Axis(f[1,1])
-	lines!(ax,get_ts(ts,step=step),kld)
+	if ndims(kld) == 1
+		lines!(ax,get_ts(ts,step=step),kld)
+	else
+		series!(ax,get_ts(ts,step=step),kld)
+	end
 	f
 end
 
@@ -514,6 +525,14 @@ kld_crick=calculate_kld(sol_crick["jump_ens"],ts_crick,u0_crick,rt=110,step=1)
 # ╔═╡ eb5e987d-419d-4b13-8780-2e6aecc49648
 plot_kld(kld_crick,ts_crick,step=1)
 
+# ╔═╡ 6fbf7de8-bd5f-4c43-9580-a7d47c613003
+md"""
+Compare simple switch and Crick switch
+"""
+
+# ╔═╡ f53958f8-dd41-41f1-bc4c-134339998a24
+plot_kld(hcat(kld_simple,kld_crick)',ts_crick,step=1)
+
 # ╔═╡ 262b2285-5013-4102-a4d9-4ae262e0ebe6
 md"""
 ### Crick switch scaling
@@ -649,12 +668,13 @@ md"""
 
 # ╔═╡ Cell order:
 # ╟─6518c587-8638-4909-a995-b331634c8079
+# ╟─524af17b-ef72-4a03-a471-585db57f3ec1
 # ╠═80447764-5654-4235-87b5-f447e68a8438
 # ╠═6232caf5-e871-4be4-adb2-076d1ff00ca7
 # ╟─daddeeae-c4c1-4028-80c4-9685023c2aad
 # ╠═9cbb14a7-884b-4783-8fb4-650260d940d4
 # ╠═c8642392-804b-40f5-be7f-9474226fc9e7
-# ╠═c424dc2f-3a01-4d7e-89c7-663a6f2deed5
+# ╟─c424dc2f-3a01-4d7e-89c7-663a6f2deed5
 # ╠═53b51591-cd8e-47bf-b6f0-0a943da78add
 # ╠═7100aae4-aabd-46f6-b0bf-f2135c6aa750
 # ╠═c21493cc-12fd-4e67-a914-9567bb81d033
@@ -711,6 +731,8 @@ md"""
 # ╠═659484ab-fbde-4728-ba28-40f6fd7054f6
 # ╠═eaea440c-e04c-45ed-8253-fa294bc19f53
 # ╠═eb5e987d-419d-4b13-8780-2e6aecc49648
+# ╠═6fbf7de8-bd5f-4c43-9580-a7d47c613003
+# ╠═f53958f8-dd41-41f1-bc4c-134339998a24
 # ╟─262b2285-5013-4102-a4d9-4ae262e0ebe6
 # ╟─7119430a-6938-4e41-9ece-463c995e04e3
 # ╠═c881aade-168f-43e6-840b-6f4ffd23b2d4
