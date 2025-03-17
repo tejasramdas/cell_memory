@@ -2,7 +2,7 @@
 
 julia_version = "1.10.5"
 manifest_format = "2.0"
-project_hash = "6e619bb0973896411585eb16c6de2fa482b710fa"
+project_hash = "6ac5b716d507eb57f24987c24a41be19366188e0"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "e2478490447631aedba0823d4d7a80b2cc8cdb32"
@@ -1587,6 +1587,12 @@ git-tree-sha1 = "f02b56007b064fbfddb4c9cd60161b6dd0f40df3"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.1.0"
 
+[[deps.LoweredCodeUtils]]
+deps = ["JuliaInterpreter"]
+git-tree-sha1 = "688d6d9e098109051ae33d126fcfc88c4ce4a021"
+uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
+version = "3.1.0"
+
 [[deps.MIMEs]]
 git-tree-sha1 = "1833212fd6f580c20d4291da9c1b4e8a655b128e"
 uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
@@ -2412,6 +2418,16 @@ deps = ["StaticArrays"]
 git-tree-sha1 = "256eeeec186fa7f26f2801732774ccf277f05db9"
 uuid = "ae5879a3-cd67-5da8-be7f-38c6eb64a37b"
 version = "1.1.1"
+
+[[deps.Revise]]
+deps = ["CodeTracking", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "REPL", "Requires", "UUIDs", "Unicode"]
+git-tree-sha1 = "9bb80533cb9769933954ea4ffbecb3025a783198"
+uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
+version = "3.7.2"
+weakdeps = ["Distributed"]
+
+    [deps.Revise.extensions]
+    DistributedExt = "Distributed"
 
 [[deps.Rmath]]
 deps = ["Random", "Rmath_jll"]
