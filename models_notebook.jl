@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.5
+# v0.20.4
 
 using Markdown
 using InteractiveUtils
@@ -14,11 +14,14 @@ begin
 	using WGLMakie
 	using DifferentialEquations.EnsembleAnalysis
 	using Bonito
-	using InformationMeasures, StatsBase
+	using StatsBase
 	using Revise
 	using Dates
 	using Latexify
 end
+
+# ╔═╡ ba10e90c-4ba2-4414-85d5-7174c7ad17df
+using PlutoUI
 
 # ╔═╡ 6518c587-8638-4909-a995-b331634c8079
 md"""
@@ -87,30 +90,24 @@ end
 get_labels(u) = map(i->i[1],u)
 
 # ╔═╡ 4e82bb1c-cda3-4a98-adfd-e7a2e656b798
-function make_models(model;u0_int=nothing,jump_p=true)
+function make_models(model)
     ode=ODEProblem(model["crn"],model["u0"],model["ts"],model["ps"])
     sde=SDEProblem(model["crn"],model["u0"],model["ts"],model["ps"])
-    if jump_p
-		if isnothing(u0_int)
-			u0_int=u_int(model["u0"])
-		end
-        jinput = JumpInputs(model["crn"], u0_int, model["ts"],model["ps"])
-        jprob = JumpProblem(jinput)
-        eprob_jump=EnsembleProblem(jprob)
-    else
-        jprob=nothing
-        eprob=nothing
-    end
-	eprob_sde = EnsembleProblem(sde)
+    u0_int=u_int(model["u0"])
+	jinput = JumpInputs(model["crn"], u0_int, model["ts"],model["ps"])
+	jprob = JumpProblem(jinput)
+	eprob_jump=EnsembleProblem(jprob)
+    eprob_sde = EnsembleProblem(sde)
     return Dict(["ode" => ode,"sde"=> sde, "jump" => jprob, "eprob_sde" => eprob_sde, "eprob_jump" => eprob_jump])
 end
 
 # ╔═╡ cffc6d07-4eec-4a75-9a95-551eeb75db81
-function solve_all(models;t_on=0,t_off=0,trajectories=1000,ensemble=true)
-	tstops=[t_on,t_off]
+function solve_all(models;trajectories=1000,ensemble=true)
+	ps=Dict(models["ps"])
+	tstops=[ps[:t_on],ps[:t_off]]
 	sols=map(i->(i=>solve(models[i];tstops=tstops)),["ode","sde","jump"])
 	if ensemble
-		push!(sols,("sde_ens" => solve(models["eprob_sde"],STrapezoid();tstops=tstops,trajectories=trajectories)))
+		push!(sols,("sde_ens" => solve(models["eprob_sde"];tstops=tstops,trajectories=trajectories)))
 		push!(sols,("jump_ens" => solve(models["eprob_jump"],SSAStepper();tstops=tstops,trajectories=trajectories)))
 	end
 	Dict(sols)
@@ -270,23 +267,6 @@ md"""
 # ╔═╡ f7232788-9741-4f5d-8790-0c79671c876a
 
 
-# ╔═╡ e114fdb6-b0ef-4855-9b96-2b121fbdffd3
-begin
-	simple_switch=Dict()
-	simple_switch["crn"] = @reaction_network begin
-		@species M0(t) M1(t)
-		@parameters t_on t_off l_on
-		@default_noise_scaling 0.1
-		@discrete_events begin
-			[5] => [l ~ 1]
-			# (t == t_off) => [l ~ 0.0]
-		end
-		(k_f1,k_b1), M0 <--> M1
-		l, M0 --> M1
-	end
-	simple_switch["crn"]
-end
-
 # ╔═╡ 0af77422-a512-4e60-8620-eea173bdb08f
 begin 
 	crick=Dict()
@@ -321,6 +301,30 @@ begin
 		l,  ∅ --> M1
 	end
 end
+
+# ╔═╡ 24d2f3df-f9ed-450d-ad14-9f1e64b13e25
+latexify(mts["crn"],form=:ode)
+
+# ╔═╡ 645f2a6a-02e6-443a-9bd8-6804980bb453
+begin
+	mts_crn = @reaction_network begin
+		@species M1(t) M2(t) M3(t)
+		@parameters t_on t_off l_on k_l1=1 k_l2=0 k_l3=0
+		@default_noise_scaling 0.2
+		@discrete_events begin
+			((t == t_on)) => [l ~ l_on]
+			((t == t_off)) => [l ~ 0.0]
+		end
+		((k_f1,k_f2,k_f3),(k_b1,k_b2,k_b3)), ∅ <--> (M1, M2, M3)
+    (k_f12*k_f2,k_f13*k_f3), M1 --> (M1+M2,M1+M3)
+		k_f23*k_f3, M2 --> M2+M3
+    (l*k_l1*k_f1,l*k_l2*k_f2,l*k_l3*k_f3),  ∅ --> (M1,M2,M3)
+	end
+end
+
+
+# ╔═╡ 554ff17b-679e-4b6a-bdf2-d1a64a7d4bc3
+latexify(mts_crn,form=:ode)
 
 # ╔═╡ 060c4219-33c9-4fe9-ba65-e412668eb31d
 begin
@@ -453,6 +457,23 @@ md"""
 ## Simple switch
 """
 
+# ╔═╡ 544cdc7c-19b7-4cf5-b1ad-242aa893fb23
+begin
+	simple_switch=Dict()
+	simple_switch["crn"] = @reaction_network begin
+		@species M0(t) M1(t)
+		@parameters t_on t_off l_on
+		@default_noise_scaling 0.1
+		@discrete_events begin
+			(t==t_on) => [l ~ 0.1]
+			(t==t_off) => [l ~ 0.0]
+		end
+		(k_f1,k_b1), M0 <--> M1
+		l, M0 --> M1
+	end
+	simple_switch["crn"]
+end
+
 # ╔═╡ cd1175f0-136b-46de-92d7-cfbd2ecc4987
 simple_switch["crn"]
 
@@ -463,9 +484,73 @@ latexify(simple_switch["crn"]; form = :ode)
 begin
 	t_on=120.0
 	t_off=170.0
-	l_on = 1
+	l_on = 0.1
 	stim=[:t_on => t_on, :t_off => t_off, :l => 0, :l_on => l_on]
 end
+
+# ╔═╡ a02e7f1b-9877-4f6c-8e9b-1bd9eed163fb
+begin
+	simp_switch = @reaction_network begin
+		@species M0(t) M1(t)
+		@parameters t_on t_off l_on
+		@default_noise_scaling 0.1
+		@discrete_events begin
+			(t==t_on) => [l ~ l_on]
+			(t==t_off) => [l ~ 0.0]
+		end
+		(k_f1,k_b1), M0 <--> M1
+		l, M0 --> M1
+	end
+end
+
+
+# ╔═╡ c5e6a9ce-e9dc-4946-9fad-89e120763fc4
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	t_o=25.0
+	t_f=150.0
+	u0=[:M0=>100.0,:M1=>0.0]
+	ps=[:k_f1=>0.01,:k_b1=>0.5,:l=>0.0,:t_on=>t_on,:t_off=>t_off,:l_on=>0.1]
+	tspan=(0.0,200.0)
+	u0_int=[:M0=>100,:M1=>0]
+	ode=ODEProblem(simp_switch,u0,tspan,ps)
+	sde=SDEProblem(simp_switch,u0,tspan,ps)
+	jinput = JumpInputs(simp_switch,u0_int,tspan,ps)
+	jprob=JumpProblem(jinput)
+end
+  ╠═╡ =#
+
+# ╔═╡ b4324056-3d0e-4ffd-ac21-923c8444a5a5
+#=╠═╡
+begin
+	probs=[ode,sde,jprob]
+	eprobs=[EnsembleProblem(probs[i]) for i in 1:3]
+end
+  ╠═╡ =#
+
+# ╔═╡ a235e015-8518-493f-8a8c-d651bd7e59b9
+# ╠═╡ disabled = true
+#=╠═╡
+for i in 1:50
+    for j in 1:3
+        empty!(ax[j]) 
+        if j==3
+            sol=solve(eprobs[j],SSAStepper();trajectories=100,tstops=[t_on,t_off])
+        else
+            sol=solve(eprobs[j];trajectories=100,tstops=[t_on,t_off])
+        end
+        for k in 1:100
+            lines!(ax[j],0:0.1:200,sol[k].(0:0.1:200,idxs=2),color=:blue,alpha=0.1)
+        end
+        ax[j].title="Time: $i"
+    end
+    sleep(0.05)
+end
+  ╠═╡ =#
+
+# ╔═╡ bb802d84-2b08-4a7a-8378-21b3fc024c71
+
 
 # ╔═╡ f5cc3e6d-73cf-4c23-a075-31008153db3b
 md"""
@@ -473,94 +558,16 @@ md"""
 """
 
 # ╔═╡ 5d15ba23-3744-40dd-b350-7a2eddfac4ad
-begin
-	simple_switch["ts"]=(0.,300.)
-	simple_switch["u0"]=[:M0 => 100, :M1 => 0]
-	simple_switch["ps"]=[:l=>0,:k_f1 => 0.005,:k_b1 => 0.1,:t_on=>0,:t_off=>0,:l_on=>0,:l=>0]
-	merge!(simple_switch,make_models(simple_switch))
-end
-
-# ╔═╡ 4cc91eba-cf05-4460-8b36-f448c4f59099
-
-
-# ╔═╡ 5798599e-e273-4029-82ff-6ac7aa27bcc1
-begin
-	model=simple_switch
-	ode=ODEProblem(model["crn"],model["u0"],model["ts"],model["ps"])
-	# jinput = JumpInputs(model["crn"], u_int(simple_switch["u0"]), model["ts"],model["ps"])
-	# jprob = JumpProblem(jinput)
-	# eprob_jump=EnsembleProblem(jprob)
-end
-
-# ╔═╡ 6cc6d06b-94f7-4492-9a07-48ac3595a33c
-s=solve(ode)
-
-# ╔═╡ c2201c75-24fe-487c-a51b-7760014248a7
-plot_sol(s,model["u0"],model["ts"])
-
-# ╔═╡ 031f79f3-340f-4424-b124-1f1f000cc960
-sde=SDEProblem(model["crn"],model["u0"],model["ts"],model["ps"])
-
-# ╔═╡ 95a1aa00-58fe-4202-a2bd-cfedd64691c9
-solve(sde)
-
-# ╔═╡ 82529b97-0e9d-419c-b30f-a1f405bf6bb6
-ens=EnsembleProblem(sde)
-
-# ╔═╡ e321d9e9-8dd4-49ee-bf42-dd67467c5958
-x=solve(ens;trajectories=1000)
-
-# ╔═╡ 0c164361-5264-4baa-b7ba-c7cb398f2b96
-plot_ens_hist(x,model["ts"],model["u0"])
-
-# ╔═╡ 5da94219-164d-476f-933a-2f37e7d4feae
-jinput
-
-# ╔═╡ 0fe8b08c-9ac9-4f58-ae36-caa9affd95e5
-JumpProblem(jinput)
-
-# ╔═╡ 3de8ca3a-793b-4faf-bbd8-92a0d75898ef
-make_models(simple_switch)
-
-# ╔═╡ bc97d259-e6a7-42d8-80f7-f6e29e3cdfa0
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	simple_switch["ts"]=(0.,300.)
 	simple_switch["u0"]=[:M0 => 1, :M1 => 0]
-	simple_switch["ps"]=vcat([:k_f1 => 0.005,:k_b1 => 0.1],stim)
+	simple_switch["ps"]=vcat([:k_f1 => 0.0005,:k_b1 => 0.01],stim)
 	merge!(simple_switch,make_models(simple_switch))
+	PlutoUI.ExperimentalLayout.hbox([simple_switch[sim_type] for sim_type in ["ode","sde","jump","eprob_sde","eprob_jump"]])
 end
-
-# ╔═╡ eaa47f4a-9d83-4f73-9076-363ea84f3f45
-simple_switch["sols"]=solve_all(simple_switch;t_on=120,t_off=170,trajectories=100);
-
-# ╔═╡ 5757f358-12bf-4040-8437-fa0171b5f032
-make_single_plot(simple_switch)
-
-# ╔═╡ fae1bed4-d76b-4c4b-8456-499feac5d225
-make_ensemble_plot(simple_switch,"sde_ens";step=1)
-
-# ╔═╡ e1d6348c-8c0b-421b-987d-7b5f1afd91fd
-make_ensemble_plot(simple_switch,"jump_ens";step=1)
-
-# ╔═╡ 7a633cae-4afc-448e-83e2-1201a32670a4
-simple_switch["kld"]=Dict()
-
-# ╔═╡ 7b14cc10-f393-47e5-b0a7-9c537c7e1b86
-simple_switch["kld"]["jump_ens"]=calculate_kld(simple_switch,"jump_ens";step=1)
-
-# ╔═╡ cb1ed683-e84e-439e-8fae-25452cc291b2
-plot_kld(simple_switch,"jump_ens";step=1)
-
-# ╔═╡ ba7b52cc-0173-4342-8b44-1e7bbe28bb9e
-PlutoUI.ExperimentalLayout.grid([
-	md"# Layout demo!"      Text("")
-	Text("I'm on the left") Dict(:a => 1, :b => [2,3])
-])
-
-# ╔═╡ dcb5cb12-8e79-48a6-9320-1348fb92a330
-md"""
-### Multiple switches
-"""
+  ╠═╡ =#
 
 # ╔═╡ 0b3c11d0-6f48-499c-9b57-72c0ea2edf40
 begin
@@ -572,12 +579,30 @@ end
 
 # ╔═╡ 9f9d5a5e-7b44-470a-8d9f-7e3182afed9d
 begin
-	multi_switch["u0"]=[:M0 => 100, :M1 => 0]
+	multi_switch["u0"]=[:M0 => 100.0, :M1 => 0.0]
 	merge!(multi_switch,make_models(multi_switch))
+	PlutoUI.ExperimentalLayout.hbox([simple_switch[sim_type] for sim_type in ["ode","sde","jump","eprob_sde","eprob_jump"]])
 end
 
+# ╔═╡ b75b0a55-a1f9-4c3c-8cf2-45159c67b669
+begin
+	x=solve(multi_switch["eprob_jump"],SSAStepper(),trajectories=1000,tstops=[120,170])
+	y=solve(simple_switch["eprob_sde"],trajectories=1000,tstops=[120,170])
+end
+
+# ╔═╡ 770360a9-bd9e-405d-af35-9f07f871c599
+
+
+# ╔═╡ dcb5cb12-8e79-48a6-9320-1348fb92a330
+md"""
+### Multiple switches
+"""
+
 # ╔═╡ 8f23cd47-8cc4-4c5b-ba64-afc45ff274d8
-multi_switch["sols"]=solve_all(multi_switch;t_on=120,t_off=170,trajectories=100);
+# ╠═╡ disabled = true
+#=╠═╡
+multi_switch["sols"]=solve_all(multi_switch;trajectories=100);
+  ╠═╡ =#
 
 # ╔═╡ 755ef828-e5dd-4b83-9272-bd396c898d4d
 make_single_plot(multi_switch)
@@ -603,12 +628,15 @@ md"""
 crick["crn"]
 
 # ╔═╡ 2364af6c-d6d6-4045-9441-c494ccb66981
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	crick["ts"]=(0.,300.)
 	crick["u0"]=[:M0 => 1, :M1 => 0, :M2 => 0]
 	crick["ps"]=vcat([:k_f1 => 0.005,:k_b1 => 0.1,:k_f2 => 0.05,:k_b2 => 0.1],stim)
 	merge!(crick,make_models(crick))
 end
+  ╠═╡ =#
 
 # ╔═╡ 2f381ec5-2fd3-4a87-8dfd-5239bf9ed8b5
 crick["sols"]=solve_all(crick;t_on=120,t_off=170,trajectories=100);
@@ -655,12 +683,15 @@ Here we have a four-stage switch where each species triggers the production of t
 mts["crn"]
 
 # ╔═╡ 17aacbe0-0f5e-4115-8407-e0547832c18f
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	mts["ts"]=(0.,1000.)
 	mts["u0"]=[:M1 => 0,:M2 => 0, :M3 =>0]
 	mts["ps"]=vcat([[[Symbol("k_f$i") => 0.01*(0.2^i), Symbol("k_b$(i)") => 0.2^i] for i in 1:3]..., stim]...)
 	merge!(mts,make_models(mts))
 end
+  ╠═╡ =#
 
 # ╔═╡ 95d4e4c8-ac84-4caa-b961-f41b6fc52d8f
 @time mts["sols"]=solve_all(mts;t_on=120,t_off=170,trajectories=100);
@@ -686,24 +717,35 @@ md"""
 creb["crn"]
 
 # ╔═╡ d429614c-678d-4545-9364-65a1f8373447
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	ts_creb=(0.,1000.)
 	u0_creb = [:C1 => 0, :C2 => 0]
 	ps_creb = [:V_x => 0.1, :V_y => 0.01, :K_x => 5, :K_y => 10, :k_dx => 0.04, :k_dy => 0.01, :r_bas_x => 0.003, :r_bas_y => 0.002, :Ω => 10]
 	creb_models=make_models(creb, u0_creb, ts_creb, ps_creb)
 end;
+  ╠═╡ =#
 
 # ╔═╡ 8a8ddc96-4105-4169-8a26-ef13e3abfd3b
+#=╠═╡
 sol_creb=solve_all(creb_models;t_on=120,t_off=170);
+  ╠═╡ =#
 
 # ╔═╡ a325f90e-572e-403d-a0f2-00cf7d757de5
+#=╠═╡
 make_single_plot(sol_creb,ts_creb,u0_creb;ylim="auto")
+  ╠═╡ =#
 
 # ╔═╡ 50bc615e-fa0d-438f-acef-7bc31d666fcb
+#=╠═╡
 make_ensemble_plot(sol_creb["sde_ens"],ts_creb,u0_creb,step=1,ylim="auto")
+  ╠═╡ =#
 
 # ╔═╡ c4e111e0-0917-4a63-80eb-ba8c9bf8c283
+#=╠═╡
 make_ensemble_plot(sol_creb["jump_ens"],ts_creb,u0_creb,step=1,ylim="auto")
+  ╠═╡ =#
 
 # ╔═╡ 6af5ce8b-32f1-4e86-9ba7-ca0a4da7ade5
 md"""
@@ -720,12 +762,15 @@ begin
 end
 
 # ╔═╡ 7327fe06-23f2-4d02-a11a-dec1ba0fa429
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	erk["ts"]=(0.,300.)
 	erk["u0"] = [:E => 0, :M => 0, :P=>0, :X=>0]
 	erk["ps"] = vcat([:K => 0.05, :δ=>50, :γ=>1, :U=>0.0],stim_erk)
 	merge!(erk,make_models(erk))
 end
+  ╠═╡ =#
 
 # ╔═╡ d0bd6975-d1b8-46d5-9546-7be381e3d2d1
 erk["sols"]=solve_all(erk;t_on=120,t_off=170,ensemble=false);
@@ -742,6 +787,8 @@ md"""
 pkm["crn"]
 
 # ╔═╡ 9515ec4a-3117-4c01-a3b9-577674dbeca9
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	ts_pkm=(0.,1000.)
 	u0_pkm = [:PKM => 0.997, :PKMa => 0.003, :FActin=>1, :FActina=>0, :RNA=>1, :RNAa=>0]
@@ -749,12 +796,17 @@ begin
 	ps_pkm=[:j_1 => 10, :j_2 => 0.05, :j_3 => 0.5, :j_4 => 0.16,:τ_1=>1500,:τ_2 =>0.5,:τ_3 => 50,:U=>0]
 	pkm_models=make_models(pkm, u0_pkm, ts_pkm, ps_pkm; u0_int=u0_int_pkm)
 end;
+  ╠═╡ =#
 
 # ╔═╡ 7bcc9337-da19-4304-a3b7-5ce92545fc82
+#=╠═╡
 sol_pkm=solve_all(pkm_models;t_on=120,t_off=170,ensemble=false);
+  ╠═╡ =#
 
 # ╔═╡ bc58d9f0-0106-4d08-8440-15ea3e8ef12e
+#=╠═╡
 make_single_plot(sol_pkm,ts_pkm,u0_pkm;ylim="auto",idxs=[2,4,6])
+  ╠═╡ =#
 
 # ╔═╡ 56bdd0db-a1b6-48d5-a668-8b0d10aa96c2
 md"""
@@ -769,11 +821,35 @@ md"""
 ## End
 """
 
+# ╔═╡ 4175fde0-0549-4545-990d-3d79f594f9c9
+begin
+	f=Figure(size=(1500,500))
+	ax=[Axis(f[1,i]) for i in 1:3]
+	f
+end
+
+# ╔═╡ 7f12d6e0-0e8e-49a9-82e8-4ddc2f9f8bfd
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	f=Figure(size=(1000,400))
+	ax1=Axis(f[1:5,1:5])
+	ax2=Axis(f[1:5,6:10])
+	slid=Makie.Slider(f[6,:],range=1:10:1000)
+	lines!(ax1,0:0.1:300,@lift(x[$(slid.value)].(0:0.1:300;idxs=2)))
+	lines!(ax2,0:0.1:300,@lift(y[$(slid.value)].(0:0.1:300;idxs=2)))
+	ylims!(ax1,0,100)
+	ylims!(ax2,0,100)
+	f
+end
+  ╠═╡ =#
+
 # ╔═╡ Cell order:
-# ╟─6518c587-8638-4909-a995-b331634c8079
+# ╠═6518c587-8638-4909-a995-b331634c8079
 # ╠═9cbb14a7-884b-4783-8fb4-650260d940d4
 # ╟─524af17b-ef72-4a03-a471-585db57f3ec1
 # ╠═80447764-5654-4235-87b5-f447e68a8438
+# ╠═ba10e90c-4ba2-4414-85d5-7174c7ad17df
 # ╟─daddeeae-c4c1-4028-80c4-9685023c2aad
 # ╠═c8642392-804b-40f5-be7f-9474226fc9e7
 # ╟─c424dc2f-3a01-4d7e-89c7-663a6f2deed5
@@ -796,9 +872,11 @@ md"""
 # ╠═1c34bd46-c116-4ec4-9fbb-9a09681d7b7a
 # ╟─ca515e68-f9fa-4ccc-adf9-e8de8f4905d3
 # ╟─f7232788-9741-4f5d-8790-0c79671c876a
-# ╠═e114fdb6-b0ef-4855-9b96-2b121fbdffd3
 # ╠═0af77422-a512-4e60-8620-eea173bdb08f
 # ╠═662fbc83-03d9-4c91-a359-1c6c36365988
+# ╠═24d2f3df-f9ed-450d-ad14-9f1e64b13e25
+# ╠═645f2a6a-02e6-443a-9bd8-6804980bb453
+# ╠═554ff17b-679e-4b6a-bdf2-d1a64a7d4bc3
 # ╠═060c4219-33c9-4fe9-ba65-e412668eb31d
 # ╠═5b781245-497e-423e-b4a8-e02d3ea90c73
 # ╠═69c0612e-30f4-445f-8c9f-8589d5313502
@@ -806,35 +884,24 @@ md"""
 # ╠═6f7c6b6f-195e-4283-905f-b956bed191ab
 # ╠═a382e5b6-abd4-48b1-bfed-be2793e20bb0
 # ╠═75527d17-bb0d-46dd-a462-6ab166b5bd82
+# ╠═544cdc7c-19b7-4cf5-b1ad-242aa893fb23
 # ╠═cd1175f0-136b-46de-92d7-cfbd2ecc4987
 # ╠═ac305374-c773-4359-b2b5-459112c65460
 # ╠═7f8a93fc-07f9-4ec5-918d-ff4dc7f40f27
+# ╠═a02e7f1b-9877-4f6c-8e9b-1bd9eed163fb
+# ╠═c5e6a9ce-e9dc-4946-9fad-89e120763fc4
+# ╠═b4324056-3d0e-4ffd-ac21-923c8444a5a5
+# ╠═4175fde0-0549-4545-990d-3d79f594f9c9
+# ╠═a235e015-8518-493f-8a8c-d651bd7e59b9
+# ╠═bb802d84-2b08-4a7a-8378-21b3fc024c71
 # ╟─f5cc3e6d-73cf-4c23-a075-31008153db3b
 # ╠═5d15ba23-3744-40dd-b350-7a2eddfac4ad
-# ╠═4cc91eba-cf05-4460-8b36-f448c4f59099
-# ╠═5798599e-e273-4029-82ff-6ac7aa27bcc1
-# ╠═6cc6d06b-94f7-4492-9a07-48ac3595a33c
-# ╠═c2201c75-24fe-487c-a51b-7760014248a7
-# ╠═031f79f3-340f-4424-b124-1f1f000cc960
-# ╠═95a1aa00-58fe-4202-a2bd-cfedd64691c9
-# ╠═82529b97-0e9d-419c-b30f-a1f405bf6bb6
-# ╠═e321d9e9-8dd4-49ee-bf42-dd67467c5958
-# ╠═0c164361-5264-4baa-b7ba-c7cb398f2b96
-# ╠═5da94219-164d-476f-933a-2f37e7d4feae
-# ╠═0fe8b08c-9ac9-4f58-ae36-caa9affd95e5
-# ╠═3de8ca3a-793b-4faf-bbd8-92a0d75898ef
-# ╠═bc97d259-e6a7-42d8-80f7-f6e29e3cdfa0
-# ╠═eaa47f4a-9d83-4f73-9076-363ea84f3f45
-# ╠═5757f358-12bf-4040-8437-fa0171b5f032
-# ╠═fae1bed4-d76b-4c4b-8456-499feac5d225
-# ╠═e1d6348c-8c0b-421b-987d-7b5f1afd91fd
-# ╠═7a633cae-4afc-448e-83e2-1201a32670a4
-# ╠═7b14cc10-f393-47e5-b0a7-9c537c7e1b86
-# ╠═cb1ed683-e84e-439e-8fae-25452cc291b2
-# ╠═ba7b52cc-0173-4342-8b44-1e7bbe28bb9e
-# ╠═dcb5cb12-8e79-48a6-9320-1348fb92a330
 # ╠═0b3c11d0-6f48-499c-9b57-72c0ea2edf40
 # ╠═9f9d5a5e-7b44-470a-8d9f-7e3182afed9d
+# ╠═b75b0a55-a1f9-4c3c-8cf2-45159c67b669
+# ╠═7f12d6e0-0e8e-49a9-82e8-4ddc2f9f8bfd
+# ╠═770360a9-bd9e-405d-af35-9f07f871c599
+# ╠═dcb5cb12-8e79-48a6-9320-1348fb92a330
 # ╠═8f23cd47-8cc4-4c5b-ba64-afc45ff274d8
 # ╠═755ef828-e5dd-4b83-9272-bd396c898d4d
 # ╠═a03d42f1-fe47-4366-ad74-c0dcaed958a5
